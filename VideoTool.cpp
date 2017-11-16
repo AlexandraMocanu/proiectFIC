@@ -44,6 +44,8 @@ const std::string windowName3 = "After Morphological Operations";
 const std::string trackbarWindowName = "Trackbars";
 
 
+char *comenzi[];
+
 void on_mouse(int e, int x, int y, int d, void *ptr)
 {
 	if (e == EVENT_LBUTTONDOWN)
@@ -138,6 +140,24 @@ void morphOps(Mat &thresh) {
 
 
 }
+
+int det_pozitie(int x, int y, int xi, int yi){
+
+  if(x<xi){
+    //fata = vest
+  }
+  if(x>xi){
+    //fata = est
+  }
+  if(y<yi){
+    //fata = nord
+  }
+  if(y>yi){
+    //fata = sud
+  }
+}
+
+
 void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 
 	Mat temp;
@@ -179,6 +199,55 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 				//draw object location on screen
 				//cout << x << "," << y;
 				drawObject(x, y, cameraFeed);
+        
+              int sockfd, portno, n;
+             struct sockaddr_in serv_addr;
+             struct hostent *server;
+             
+             char buffer[256];
+          	
+             portno = 20232;
+             
+             /* Create a socket point */
+             sockfd = socket(AF_INET, SOCK_STREAM, 0);
+             
+             if(argc!=2){
+          	   printf("Usage %s <comanda>.\n",argv[0]);
+          	   exit(0);
+             }
+             
+             if (sockfd < 0) {
+                perror("ERROR opening socket");
+                exit(1);
+             }
+          	
+             server = gethostbyname("193.226.12.217");
+             
+             if (server == NULL) {
+                fprintf(stderr,"ERROR, no such host\n");
+                exit(0);
+             }
+             
+             bzero((char *) &serv_addr, sizeof(serv_addr));
+             serv_addr.sin_family = AF_INET;
+             bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
+             serv_addr.sin_port = htons(portno);
+             
+             /* Now connect to the server */
+             if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
+                perror("ERROR connecting");
+                exit(1);
+             }
+             
+             //send_comenzi(sockfd,comenzi);
+             
+             int xi, yi;
+             xi = x;
+             yi = y;
+             
+             send_comenzi(sockfd,"f"); //=> afla apoi urmatoare pozitie (cum s-a modificat x, y) => fata robotului
+             int fata;
+             fata = det_pozitie(x,y,xi,yi);
 
 			}
 
@@ -187,10 +256,22 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 		else putText(cameraFeed, "TOO MUCH NOISE! ADJUST FILTER", Point(0, 50), 1, 2, Scalar(0, 0, 255), 2);
 	}
 }
-/*int main(int argc, char* argv[])
-{
 
-	//some boolean variables for different functionality within this
+void send_comenzi(int sockfd, char *comenzi){
+  	int i, n;
+  		
+  	n = send(sockfd,comenzi,strlen(comenzi),0);
+  	
+  	n = send(sockfd,"s",1,0);
+  	if(n < 0) {
+  		perror("ERROR writing to socket");
+  		exit(3);
+  	}
+}
+
+int main(int argc, char* argv[])
+{
+  //some boolean variables for different functionality within this
 	//program
 	bool trackObjects = true;
 	bool useMorphOps = true;
@@ -218,8 +299,7 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 	//start an infinite loop where webcam feed is copied to cameraFeed matrix
 	//all of our operations will be performed within this loop
 
-
-
+   strcpy(comenzi,argv[1]);
 
 	while (1) {
 
@@ -257,104 +337,8 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 		//delay 30ms so that screen can refresh.
 		//image will not appear without this waitKey() command
 		waitKey(30);
+   
 	}
 
 	return 0;
-}*/
-
-void send_comenzi(int sockfd, char *comenzi){
-	int i, n;
-	
-	/*for(i=0;i<strlen(comenzi);i++)
-		if(comenzi[i]!= '\\')
-		{
-			n = send(sockfd,comenzi[i],1,0);
-			
-			if (n < 0) {
-				perror("ERROR writing to socket");
-				exit(2);
-			}
-		}*/
-		
-	n = send(sockfd,comenzi,strlen(comenzi),0);
-	
-	n = send(sockfd,"s",1,0);
-	if(n < 0) {
-		perror("ERROR writing to socket");
-		exit(3);
-	}
-}
-
-int main(int argc, char *argv[]) {
-   int sockfd, portno, n;
-   struct sockaddr_in serv_addr;
-   struct hostent *server;
-   
-   char buffer[256];
-	
-   portno = 20232;
-   
-   /* Create a socket point */
-   sockfd = socket(AF_INET, SOCK_STREAM, 0);
-   
-   if(argc!=2){
-	   printf("Usage %s <comanda>.\n",argv[0]);
-	   exit(0);
-   }
-   
-   if (sockfd < 0) {
-      perror("ERROR opening socket");
-      exit(1);
-   }
-	
-   server = gethostbyname("193.226.12.217");
-   
-   if (server == NULL) {
-      fprintf(stderr,"ERROR, no such host\n");
-      exit(0);
-   }
-   
-   bzero((char *) &serv_addr, sizeof(serv_addr));
-   serv_addr.sin_family = AF_INET;
-   bcopy((char *)server->h_addr, (char *)&serv_addr.sin_addr.s_addr, server->h_length);
-   serv_addr.sin_port = htons(portno);
-   
-   /* Now connect to the server */
-   if (connect(sockfd, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-      perror("ERROR connecting");
-      exit(1);
-   }
-   
-   send_comenzi(sockfd,argv[1]);
-   
-   //n = send(sockfd,"f",strlen("f"),MSG_CONFIRM);
-
-   
-   /* Now ask for a message from the user, this message
-      * will be read by server
-   */
-	
-   /*printf("Please enter the message: ");
-   bzero(buffer,256);
-   fgets(buffer,255,stdin);
-   
-   /* Send message to the server 
-   n = write(sockfd, buffer, strlen(buffer));
-   
-   if (n < 0) {
-      perror("ERROR writing to socket");
-      exit(1);
-   }*/
-   
-   /* Now read server response */
-   /*bzero(buffer,256);
-   n = read(sockfd, buffer, 255);
-   
-   if (n < 0) {
-      perror("ERROR reading from socket");
-      exit(1);
-   }*/
-	
-   //printf("%s\n",buffer);
-   return 0;
 }
