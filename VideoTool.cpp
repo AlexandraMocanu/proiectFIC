@@ -249,11 +249,10 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
              int fata;
              fata = det_pozitie(x,y,xi,yi);
 
-			}
+		//aici ar fi venit algoritmul de strategie
 
-
-		}
-		else putText(cameraFeed, "TOO MUCH NOISE! ADJUST FILTER", Point(0, 50), 1, 2, Scalar(0, 0, 255), 2);
+	
+		//else putText(cameraFeed, "TOO MUCH NOISE! ADJUST FILTER", Point(0, 50), 1, 2, Scalar(0, 0, 255), 2);
 	}
 }
 
