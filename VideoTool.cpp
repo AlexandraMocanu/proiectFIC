@@ -253,6 +253,8 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 
 	
 		//else putText(cameraFeed, "TOO MUCH NOISE! ADJUST FILTER", Point(0, 50), 1, 2, Scalar(0, 0, 255), 2);
+				
+		//4 different functions: socket connection, send commands, determina fata obiectului, algoritm
 	}
 }
 
