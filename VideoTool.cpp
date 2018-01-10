@@ -5,17 +5,12 @@
 #include "opencv2/highgui/highgui.hpp"
 //#include <opencv2\cv.h>
 #include "opencv2/opencv.hpp"
-
 #include <stdio.h>
 #include <stdlib.h>
-
 #include <sys/types.h>
 #include <sys/socket.h>
-
-
 #include <netdb.h>
 #include <netinet/in.h>
-
 #include <string.h>
 
 using namespace std;
@@ -43,8 +38,13 @@ const std::string windowName2 = "Thresholded Image";
 const std::string windowName3 = "After Morphological Operations";
 const std::string trackbarWindowName = "Trackbars";
 
+char str2[10]; //variabila pentru trimiterea comenzilor
+int usx, usy, oponentx, oponenty;
+char comenzi[10];
+int port=20232;
+char ip_adr[15]="193.226.12.217";
+int pozitie_fatax, pozitie_fatay;
 
-char *comenzi[];
 
 void on_mouse(int e, int x, int y, int d, void *ptr)
 {
@@ -141,23 +141,6 @@ void morphOps(Mat &thresh) {
 
 }
 
-int det_pozitie(int x, int y, int xi, int yi){
-
-  if(x<xi){
-    //fata = vest
-  }
-  if(x>xi){
-    //fata = est
-  }
-  if(y<yi){
-    //fata = nord
-  }
-  if(y>yi){
-    //fata = sud
-  }
-}
-
-
 void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 
 	Mat temp;
@@ -199,29 +182,49 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 				//draw object location on screen
 				//cout << x << "," << y;
 				drawObject(x, y, cameraFeed);
-        
-              int sockfd, portno, n;
+        		}
+
+	
+	     else putText(cameraFeed, "TOO MUCH NOISE! ADJUST FILTER", Point(0, 50), 1, 2, Scalar(0, 0, 255), 2);
+	}
+}
+
+void send_command(int sockfd, char *com){
+	int i;
+
+	for(int i=0; i<strlen(com); i++){   
+  		sprintf(str2,"%c",com[i]);
+     		n = send(sockfd, str2, strlen(str2),0);
+   
+     		if (n < 0) {
+      			perror("ERROR writing to socket");
+      			exit(1);
+     		}
+  	}
+}
+
+void socket_comm(char *ip, int port, char *com){
+
+             int sockfd, n;
              struct sockaddr_in serv_addr;
              struct hostent *server;
              
              char buffer[256];
-          	
-             portno = 20232;
              
              /* Create a socket point */
              sockfd = socket(AF_INET, SOCK_STREAM, 0);
              
-             if(argc!=2){
+             /*if(argc!=2){
           	   printf("Usage %s <comanda>.\n",argv[0]);
           	   exit(0);
-             }
+             }*/
              
              if (sockfd < 0) {
                 perror("ERROR opening socket");
                 exit(1);
              }
           	
-             server = gethostbyname("193.226.12.217");
+	     server = gethostbyname(ip);
              
              if (server == NULL) {
                 fprintf(stderr,"ERROR, no such host\n");
@@ -239,35 +242,153 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
                 exit(1);
              }
              
-             //send_comenzi(sockfd,comenzi);
+	    send_commands(sockfd, com);
              
-             int xi, yi;
-             xi = x;
-             yi = y;
-             
-             send_comenzi(sockfd,"f"); //=> afla apoi urmatoare pozitie (cum s-a modificat x, y) => fata robotului
-             int fata;
-             fata = det_pozitie(x,y,xi,yi);
 
-		//aici ar fi venit algoritmul de strategie
+	     bzero(buffer,256);
+   	     n = read(sockfd, buffer, 255);
+   
+   	    if (n < 0) {
+      		perror("ERROR reading from socket");
+      		exit(1);
+   	    }
 
-	
-		//else putText(cameraFeed, "TOO MUCH NOISE! ADJUST FILTER", Point(0, 50), 1, 2, Scalar(0, 0, 255), 2);
-				
-		//4 different functions: socket connection, send commands, determina fata obiectului, algoritm
-	}
 }
 
-void send_comenzi(int sockfd, char *comenzi){
-  	int i, n;
-  		
-  	n = send(sockfd,comenzi,strlen(comenzi),0);
-  	
-  	n = send(sockfd,"s",1,0);
-  	if(n < 0) {
-  		perror("ERROR writing to socket");
-  		exit(3);
-  	}
+
+void determina_pozitie_fata(){
+
+	socket_comm(ip_adr,port,"fs"); //aici se modifica coordanetele robotului
+	
+	//Matrix to store each frame of the webcam feed
+	Mat cameraFeed;
+	//matrix storage for HSV image
+	Mat HSV;
+	//matrix storage for binary threshold image
+	Mat threshold;
+	//x and y values for the location of the object
+	int x = 0, y = 0;
+	//create slider bars for HSV filtering
+	createTrackbars();
+	//video capture object to acquire webcam feed
+	VideoCapture capture;
+	//open capture object at location zero (default location for webcam), an ip
+	capture.open("rtmp://172.16.254.99/live/nimic");
+	//set height and width of capture frame
+	capture.set(CV_CAP_PROP_FRAME_WIDTH, FRAME_WIDTH);
+	capture.set(CV_CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT);
+ 	capture.read(cameraFeed);
+  	cvtColor(cameraFeed, HSV, COLOR_BGR2HSV);
+	//filter HSV image between values and store filtered image to
+	//threshold matrix
+   
+	inRange(HSV, Scalar(H_MIN, S_MIN, V_MIN), Scalar(H_MAX, S_MAX, V_MAX), threshold);
+
+	//perform morphological operations on thresholded image to eliminate noise
+	//and emphasize the filtered object(s)
+	morphOps(threshold);
+	//pass in thresholded frame to our object tracking function
+	//this function will return the x and y coordinates of the
+	//filtered object
+   
+	trackFilteredObject(x, y, threshold, cameraFeed);
+  	printf("Fata = %d %d.\n", x, y);
+   
+   	pozitie_fatax=x;
+   	pozitie_fatay=y;
+
+}
+
+void strategie(){
+
+
+	determina_pozitie_fata();
+
+	if(pozitie_fatax<usx){
+		printf("Fata spre vest.\n"); //a
+
+		if(oponenty>usy){ //oponent spre nord
+			printf("Dreapta si in fata.\n");
+			socket_comm(ip_adr,port,"rfs");
+		}
+		if(oponentx>usx){ //oponent spre est
+			printf("Dreapta, dreapta si in fata.\n");
+			socket_comm(ip_adr,port,"rrfs");
+		}
+		if(oponenty<usy){ //oponent spre sud
+			printf("Stanga si in fata.\n");
+			socket_comm(ip_adr,port,"lfs");
+		}
+		if(oponentx<usx){ //oponent spre vest
+			printf("In fata.\n");
+			socket_comm(ip_adr,port,"fs");
+		}
+	}
+	if(pozitie_fatax>usx){
+		printf("Fata spre est.\n"); //b
+
+		if(oponenty>usy){ //oponent spre nord
+			printf("Stanga si in fata.\n");
+			socket_comm(ip_adr,port,"lfs");
+		}
+		if(oponentx>usx){ //oponent spre est
+			printf("In fata.\n");
+			socket_comm(ip_adr,port,"fs");
+		}
+		if(oponenty<usy){ //oponent spre sud
+			printf("Dreapta si in fata.\n");
+			socket_comm(ip_adr,port,"rfs");
+		}
+		if(oponentx<usx){ //oponent spre vest
+			printf("Stanga, stanga si in fata.\n");
+			socket_comm(ip_adr,port,"llfs");
+		}
+	}
+	if(pozitie_fatay<usy){
+		printf("Fata spre nord.\n"); //c
+
+		if(oponenty>usy){ //oponent spre nord
+			printf("In fata.\n");
+			socket_comm(ip_adr,port,"fs");
+		}
+		if(oponentx>usx){ //oponent spre est
+			printf("Dreapta si in fata.\n");
+			socket_comm(ip_adr,port,"rfs");
+		}
+		if(oponenty<usy){ //oponent spre sud
+			printf("Dreapta, dreapta si in fata.\n");
+			socket_comm(ip_adr,port,"rrfs");
+		}
+		if(oponentx<usx){ //oponent spre vest
+			printf("Stanga si in fata.\n");
+			socket_comm(ip_adr,port,"lfs");
+		}
+	}
+	if(pozitie_fatay>usy){
+		printf("Fata spre sud.\n"); //d
+
+		if(oponenty>usy){ //oponent spre nord
+			printf("Dreapta, dreapta si in fata.\n");
+			socket_comm(ip_adr,port,"rrfs");
+		}
+		if(oponentx>usx){ //oponent spre est
+			printf("Stanga si in fata.\n");
+			socket_comm(ip_adr,port,"lfs");
+		}
+		if(oponenty<usy){ //oponent spre sud
+			printf("In fata.\n");
+			socket_comm(ip_adr,port,"fs");
+		}
+		if(oponentx<usx){ //oponent spre vest
+			printf("Dreapta si in fata.\n");
+			socket_comm(ip_adr,port,"rfs");
+		}
+	}
+
+
+	
+	
+	
 }
 
 int main(int argc, char* argv[])
@@ -300,8 +421,6 @@ int main(int argc, char* argv[])
 	//start an infinite loop where webcam feed is copied to cameraFeed matrix
 	//all of our operations will be performed within this loop
 
-   strcpy(comenzi,argv[1]);
-
 	while (1) {
 
 
@@ -311,14 +430,38 @@ int main(int argc, char* argv[])
 		cvtColor(cameraFeed, HSV, COLOR_BGR2HSV);
 		//filter HSV image between values and store filtered image to
 		//threshold matrix
-		//inRange(HSV, Scalar(H_MIN, S_MIN, V_MIN), Scalar(H_MAX, S_MAX, V_MAX), threshold);
-		inRange(HSV, Scalar(149, S_MIN, V_MIN), Scalar(256, S_MAX, V_MAX), threshold);
-		inRange(HSV, Scalar(27, 55, V_MIN), Scalar(50, S_MAX, V_MAX), threshold2);
+
+		//robotul nostru
+		inRange(HSV, Scalar(H_MIN, S_MIN, V_MIN), Scalar(H_MAX, S_MAX, V_MAX), threshold);
+		//inRange(HSV, Scalar(149, S_MIN, V_MIN), Scalar(256, S_MAX, V_MAX), threshold);
+		//inRange(HSV, Scalar(27, 55, V_MIN), Scalar(50, S_MAX, V_MAX), threshold2);
 		//perform morphological operations on thresholded image to eliminate noise
 		//and emphasize the filtered object(s)
 		if (useMorphOps){
 			morphOps(threshold);
-			morphOps(threshold2);
+			//morphOps(threshold2);
+		}
+		//pass in thresholded frame to our object tracking function
+		//this function will return the x and y coordinates of the
+		//filtered object
+		if (trackObjects){
+			trackFilteredObject(x, y, threshold, cameraFeed);
+
+			usx = x;
+			usy = y;
+
+			//trackFilteredObject(x2, y2, threshold2, cameraFeed);
+		}
+
+		//robotul oponent
+		inRange(HSV, Scalar(H_MIN, S_MIN, V_MIN), Scalar(H_MAX, S_MAX, V_MAX), threshold);
+		//inRange(HSV, Scalar(149, S_MIN, V_MIN), Scalar(256, S_MAX, V_MAX), threshold);
+		//inRange(HSV, Scalar(27, 55, V_MIN), Scalar(50, S_MAX, V_MAX), threshold2);
+		//perform morphological operations on thresholded image to eliminate noise
+		//and emphasize the filtered object(s)
+		if (useMorphOps){
+			morphOps(threshold);
+			//morphOps(threshold2);
 		}
 
 		//pass in thresholded frame to our object tracking function
@@ -326,18 +469,28 @@ int main(int argc, char* argv[])
 		//filtered object
 		if (trackObjects){
 			trackFilteredObject(x, y, threshold, cameraFeed);
-			trackFilteredObject(x2, y2, threshold2, cameraFeed);
+
+			oponentx = x;
+			oponenty = y;
+
+			//trackFilteredObject(x2, y2, threshold2, cameraFeed);
 		}
 
+		//strategie
+		//daca avem roboti in ring
+		if((usx!=0)&&(usy!=0) && (oponentx!=0)&&(oponenty!=0)){
+			strategie();
 
-		//show frames
-		imshow(windowName2, threshold);
-		imshow(windowName, cameraFeed);
-		//imshow(windowName1, HSV);
-		setMouseCallback("Original Image", on_mouse, &p);
-		//delay 30ms so that screen can refresh.
-		//image will not appear without this waitKey() command
-		waitKey(30);
+			//show frames
+			imshow(windowName2, threshold);
+			imshow(windowName, cameraFeed);
+			//imshow(windowName1, HSV);
+			setMouseCallback("Original Image", on_mouse, &p);
+			//delay 30ms so that screen can refresh.
+			//image will not appear without this waitKey() command
+			waitKey(30);
+		}
+
    
 	}
 
