@@ -190,7 +190,7 @@ void trackFilteredObject(int &x, int &y, Mat threshold, Mat &cameraFeed) {
 }
 
 void send_command(int sockfd, char *com){
-	int i;
+	int i, n;
 
 	for(int i=0; i<strlen(com); i++){   
   		sprintf(str2,"%c",com[i]);
